@@ -1,0 +1,113 @@
+#####################################################################################
+### Hollis R. Jones 
+### Department of Life Sciences, Louisiana State University, Baton Rouge, LA, USA 
+#####################################################################################
+
+
+library(limma)
+library(edgeR)
+library(Rsubread) #needed the bioclite stuff below 
+source("https://bioconductor.org/biocLite.R")
+biocLite("Rsubread")
+install.packages("vegan")
+library(vegan)
+install.packages("ape")
+library(ape)
+
+data = read.table("", header=T, row.names=1, com='')
+
+data_C <- data
+#This renames the rownames so that the techincal replicates (i.e. same library sequenced on multiple lanes) can be merged into a single identifier
+
+colnames(data_C) <- c("", "")
+data_C <- data_C[, c()]
+colnames(data_C)
+data_C <- data_C[, c()]
+head(data_C)
+#This is a targets file that identifies sample name, condition, and time point. This will be used to make the model
+targets2 <- read.csv("", sep=",") #since it is a csv make sure that it is sep by a , 
+
+#This confirms that the samples will be processed in the order that was previously established)
+col_ordering = c()
+rnaseqMatrix = data_C[,col_ordering]
+#This rounds the counts data to whole integers
+rnaseqMatrix = round(rnaseqMatrix)
+#This removes any gene that does not have at least 1 cpm in 3 samples
+rnaseqMatrix = rnaseqMatrix[rowSums(cpm(rnaseqMatrix)>1)>=3,]
+colnames(rnaseqMatrix)
+
+#This identifies what samples are in the same groups by providing both a treatment conditon and a time variable. This will change depending on your experimental design.
+targets2$sample <- c("")
+
+Group <- factor(paste(targets2$,targets2$,sep="."))
+View(Group)
+cbind(targets2,Group=Group)
+#This creates a DGEList of counts and groups
+y <- DGEList(counts=rnaseqMatrix, group=Group)
+#This calculates the normalization of each library
+y <- calcNormFactors(y)
+#This proviodes normalization ratio and normalized library size
+y$samples
+
+design2 <- model.matrix(~0 + Group)
+colnames(design2) <- levels(Group)
+design2
+dw2 <- estimateGLMRobustDisp(y,design=design2)   #this takes a while 
+fit <- glmFit(dw2,design2)
+colnames(fit)
+save(fit,dw2,Group,y,file = "")
+ln = load(file='')
+ln
+
+
+
+#####################################
+#### Treatment Comparisons ##########
+#####################################
+## note: did this same step for each pairwise comparison
+
+# example: WH vs. WL
+setwd("")
+
+#code for DE transcripts results
+W.H_W.L <- glmLRT(fit, contrast = c(0,0,0,1,-1,0)) #this determines which comparison you are making 
+W.H_W.L_DE <- decideTestsDGE(W.H_W.L, p.value = 0.05 )
+summary(W.H_W.L_DE)
+WH_WL_List <- topTags(W.H_W.L, n = Inf, adjust.method = "BH" )
+WH_WL_Keep <-WH_WL_List$table$FDR <= 0.05 & abs(WH_WL_List$table$logFC) >= 1
+WH_WL <- WH_WL_List[WH_WL_Keep,]
+write.csv(WH_WL_List$table, "WH_WL_all.csv")  
+write.table(WH_WL, "WH_WL_short.csv", sep=",") 
+
+#Code for annotation and DE genes results 
+WH_WL_annotation <- WH_WL$table
+WH_WL_annotation$Sequence.Name <- row.names(WH_WL_annotation)
+head(WH_WL_annotation)
+colnames(Cvirginica_mRNA_annotations) <- c("Sequence.Name","Sequence Description","InterPro GO ID" )
+WH_WL_annotation <- merge(WH_WL_annotation,Cvirginica_mRNA_annotations, by = "Sequence.Name")
+head(WH_WL_annotation)
+write.table(WH_WL_annotation, "WH_WL_DEG.csv", sep=",",quote = F,row.names = F) 
+
+#code to prep for Matz MWU script (Matz code available at https://github.com/z0on/GO_MWU)
+WH_WL_table <- WH_WL_List$table #everything below this makes the neg log p value for the matz script 
+WH_WL_table <- transform(WH_WL_table, sign = ifelse(logFC>0,1,-1))
+WH_WL_table$logpvalu <- -log(WH_WL_table$PValue)
+WH_WL_table$signedlogpvalue <- (WH_WL_table$logpvalu * WH_WL_table$sign)
+colnames(WH_WL_table)
+WH_WL_GO <- WH_WL_table[8]
+View(WH_WL_GO)
+write.csv(WH_WL_GO, "WH_WL_GO.csv") 
+
+summary(W.H_W.L_DE)
+
+
+
+
+
+
+
+
+
+
+
+
